@@ -58,7 +58,8 @@ class Authenticator(dns_common.DNSAuthenticator):
         )
 
     def _perform(self, domain, validation_name, validation):
-        self.zone = self.cloud.get_zone(domain + '.')
+        base_domain = '.'.join(domain.split('.')[1:])
+        self.zone = self.cloud.get_zone(base_domain + '.')
         self.recordset = self.cloud.create_recordset(
             self.zone['id'], validation_name + '.', "TXT", [validation])
 

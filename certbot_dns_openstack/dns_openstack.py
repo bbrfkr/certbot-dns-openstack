@@ -21,6 +21,13 @@ from certbot.plugins import dns_common
 from openstack.config import loader
 from openstack import connection
 
+from acme import challenges
+from certbot import achallenges
+from certbot.display import util as display_util
+from time import sleep
+from typing import List
+
+
 LOG = logging.getLogger(__name__)
 
 
@@ -56,6 +63,30 @@ class Authenticator(dns_common.DNSAuthenticator):
                 self.conf('cloud')
             )
         )
+
+    def perform(self, achalls: List[achallenges.AnnotatedChallenge]
+                ) -> List[challenges.ChallengeResponse]: # pylint: disable=missing-function-docstring
+        self._setup_credentials()
+
+        self._attempt_cleanup = True
+
+        responses = []
+        for achall in achalls:
+            domain = self.config.namespace.domains[0]
+            validation_domain_name = achall.validation_domain_name(achall.domain)
+            validation = achall.validation(achall.account_key)
+
+            self._perform(domain, validation_domain_name, validation)
+            responses.append(achall.response(achall.account_key))
+
+        # DNS updates take time to propagate and checking to see if the update has occurred is not
+        # reliable (the machine this code is running on might be able to see an update before
+        # the ACME server). So: we sleep for a short amount of time we believe to be long enough.
+        display_util.notify("Waiting %d seconds for DNS changes to propagate" %
+                    self.conf('propagation-seconds'))
+        sleep(self.conf('propagation-seconds'))
+
+        return responses
 
     def _perform(self, domain, validation_name, validation):
         base_domain = '.'.join(domain.split('.')[1:])
